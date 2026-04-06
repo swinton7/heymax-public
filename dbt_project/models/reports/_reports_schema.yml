@@ -50,6 +50,9 @@ models:
         description: Distinct users in this segment for this period.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
 
   - name: rpt_net_growth
     description: >
@@ -99,18 +102,34 @@ models:
         description: Months elapsed between cohort_month and the observed activity month.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
       - name: retained_users
         description: Users from this cohort who were active in this observation month.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
       - name: cohort_size
         description: Total users in the cohort (denominator for retention_pct).
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
       - name: retention_pct
         description: Percentage of cohort still active — retained_users / cohort_size * 100.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 and retention_pct <= 100"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= cohort_size * 100.0 / cohort_size"
+                name: retention_pct_retained_users_never_exceeds_cohort_size
 
   - name: rpt_engagement
     description: >
@@ -137,10 +156,16 @@ models:
         description: Distinct users who triggered this event_type in this month.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 1"
       - name: events_per_user
         description: total_events / active_users — engagement intensity metric.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 1"
 
   - name: rpt_miles_economy
     description: >
@@ -164,10 +189,16 @@ models:
         description: Sum of miles_amount for this group.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
       - name: transactions
         description: Number of events in this group.
         tests:
           - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
       - name: transaction_category
         description: >
           Merchant category for category rank rows. NULL for monthly flow rows
