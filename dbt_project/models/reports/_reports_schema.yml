@@ -1,0 +1,174 @@
+version: 2
+
+models:
+  - name: rpt_growth_accounting
+    description: >
+      Growth accounting cohort classification per period, with dimensional attributes
+      for segmentation. Grain: (period_grain, period_start, cohort_type, country,
+      acquisition_source, first_platform).
+
+      Joins int_user_activity_periods (cohort spine) with dim_users (dimensional context).
+      Uses LAG/LEAD window functions — no self-joins.
+
+      cohort_type definitions:
+        new         — first active period ever
+        retained    — active in current AND immediately prior period
+        resurrected — active now, not last period, but seen before
+        churned     — active last period, missed this period (attributed to missed period)
+    columns:
+      - name: period_grain
+        description: Granularity — 'day', 'week', or 'month'.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["day", "week", "month"]
+      - name: period_start
+        description: Start date of the period truncated to grain.
+        tests:
+          - not_null
+      - name: cohort_type
+        description: Growth accounting classification.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["new", "retained", "resurrected", "churned"]
+      - name: country
+        description: ISO country code from dim_users.
+        tests:
+          - not_null
+      - name: acquisition_source
+        description: UTM acquisition source from dim_users.
+        tests:
+          - not_null
+      - name: first_platform
+        description: First platform used, from dim_users.
+        tests:
+          - not_null
+      - name: user_count
+        description: Distinct users in this segment for this period.
+        tests:
+          - not_null
+
+  - name: rpt_net_growth
+    description: >
+      Monthly net user growth. One row per month.
+      net_growth = new + resurrected − churned.
+      Convenience roll-up over rpt_growth_accounting (monthly grain).
+    columns:
+      - name: period_start
+        description: First day of the month.
+        tests:
+          - not_null
+          - unique
+      - name: net_growth
+        description: Net users added (positive = growth, negative = contraction).
+        tests:
+          - not_null
+      - name: new_users
+        description: Users active for the first time ever this month.
+        tests:
+          - not_null
+      - name: retained_users
+        description: Users active in both this month and the immediately prior month.
+        tests:
+          - not_null
+      - name: resurrected_users
+        description: Users active this month after at least one month of inactivity.
+        tests:
+          - not_null
+      - name: churned_users
+        description: Users who were active last month but not this month.
+        tests:
+          - not_null
+
+  - name: rpt_cohort_retention
+    description: >
+      Monthly cohort retention triangle.
+      For each acquisition cohort (month of first_seen_at), tracks the percentage
+      of users still active N months after acquisition.
+      Grain: (cohort_month, months_since_first).
+      Builds from dim_users (cohort definition) + int_user_activity_periods (activity).
+    columns:
+      - name: cohort_month
+        description: Month the cohort was first acquired (1st of month).
+        tests:
+          - not_null
+      - name: months_since_first
+        description: Months elapsed between cohort_month and the observed activity month.
+        tests:
+          - not_null
+      - name: retained_users
+        description: Users from this cohort who were active in this observation month.
+        tests:
+          - not_null
+      - name: cohort_size
+        description: Total users in the cohort (denominator for retention_pct).
+        tests:
+          - not_null
+      - name: retention_pct
+        description: Percentage of cohort still active — retained_users / cohort_size * 100.
+        tests:
+          - not_null
+
+  - name: rpt_engagement
+    description: >
+      Monthly engagement depth metrics. Two complementary views combined via UNION ALL:
+        - event_type = 'all'  : aggregate events-per-user summary across all event types
+        - event_type = <type> : per-event-type breakdown for event mix analysis
+      Grain: (month, event_type). Builds from fct_events.
+    columns:
+      - name: month
+        description: First day of the month.
+        tests:
+          - not_null
+      - name: event_type
+        description: >
+          'all' for the aggregate summary row; otherwise the specific event type
+          (miles_earned, miles_redeemed, reward_search, share, like).
+        tests:
+          - not_null
+      - name: total_events
+        description: Total event count for this month and event_type.
+        tests:
+          - not_null
+      - name: active_users
+        description: Distinct users who triggered this event_type in this month.
+        tests:
+          - not_null
+      - name: events_per_user
+        description: total_events / active_users — engagement intensity metric.
+        tests:
+          - not_null
+
+  - name: rpt_miles_economy
+    description: >
+      Two complementary views of the miles rewards loop combined via UNION ALL:
+        - month IS NOT NULL : monthly miles flow — earned vs redeemed over time
+        - month IS NULL     : all-time category ranks — top merchant categories by miles earned
+      Grain: (month, event_type) for flow; (transaction_category) for category ranks.
+      Builds from fct_events.
+    columns:
+      - name: month
+        description: >
+          First day of the month for monthly flow rows. NULL for category rank rows
+          (which aggregate all time).
+      - name: event_type
+        description: >
+          'miles_earned' or 'miles_redeemed' for monthly flow rows.
+          Always 'miles_earned' for category rank rows.
+        tests:
+          - not_null
+      - name: total_miles
+        description: Sum of miles_amount for this group.
+        tests:
+          - not_null
+      - name: transactions
+        description: Number of events in this group.
+        tests:
+          - not_null
+      - name: transaction_category
+        description: >
+          Merchant category for category rank rows. NULL for monthly flow rows
+          (which aggregate across all categories).

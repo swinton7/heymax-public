@@ -1,0 +1,103 @@
+version: 2
+
+models:
+  - name: dim_users
+    description: >
+      One row per user. Contains stable descriptive attributes only — who the user is,
+      not what they have done. Attributes anchored to first observed event for stability.
+      Additive metrics (total events, miles earned, etc.) are computed in the report layer (rpt_*).
+    columns:
+      - name: user_sk
+        description: MD5 surrogate key derived from user_id.
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: Natural platform user identifier.
+        tests:
+          - not_null
+          - unique
+      - name: gender
+        description: User-reported gender at first event.
+        tests:
+          - not_null
+      - name: country
+        description: ISO country code at first event.
+        tests:
+          - not_null
+      - name: first_platform
+        description: Platform used at first event (web, ios, android).
+        tests:
+          - not_null
+      - name: acquisition_source
+        description: UTM source at first event.
+        tests:
+          - not_null
+      - name: first_event_type
+        description: First action the user ever took.
+        tests:
+          - not_null
+      - name: first_seen_at
+        description: Timestamp of the user's first event.
+        tests:
+          - not_null
+      - name: last_seen_at
+        description: Timestamp of the user's most recent event.
+        tests:
+          - not_null
+
+  - name: fct_events
+    description: >
+      One row per event. Grain: individual user action.
+      Foreign key to dim_users via user_sk.
+    columns:
+      - name: event_id
+        description: MD5 surrogate key for the event.
+        tests:
+          - not_null
+          - unique
+      - name: user_sk
+        description: FK to dim_users.user_sk.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_sk
+      - name: user_id
+        description: Natural user identifier.
+        tests:
+          - not_null
+      - name: event_time
+        description: Full UTC timestamp of the event.
+        tests:
+          - not_null
+      - name: event_date
+        description: Calendar date of the event.
+        tests:
+          - not_null
+      - name: event_type
+        description: Type of action performed.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["miles_earned", "miles_redeemed", "reward_search", "share", "like"]
+      - name: platform
+        description: Client platform.
+        tests:
+          - not_null
+      - name: transaction_category
+        description: >
+          Merchant or reward category. Present on miles_earned, miles_redeemed,
+          and some reward_search events. Null for share and like events.
+      - name: miles_amount
+        description: Miles earned or redeemed. Null for non-miles events.
+      - name: utm_source
+        description: Acquisition channel (facebook, google, organic, referral, tiktok).
+        tests:
+          - not_null
+      - name: country
+        description: ISO country code.
+        tests:
+          - not_null

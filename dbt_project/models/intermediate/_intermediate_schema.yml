@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: int_user_activity_periods
+    description: >
+      Activity spine — one row per (user_id, period_grain, period_start) where
+      the user had at least one event. Builds from fct_events and is the shared
+      foundation for any report that needs to reason about "who was active when"
+      across multiple time granularities.
+
+      Grain: (user_id, period_grain, period_start)
+
+      Offset arithmetic (prior_period_start, next_period_start) is owned here
+      so downstream report models carry no hardcoded interval logic. To add a new
+      grain (e.g. 'quarter'), only this model needs to change.
+
+      Consumers:
+        - rpt_growth_accounting : cohort classification spine (New/Retained/Resurrected/Churned)
+        - rpt_cohort_retention  : monthly retention triangle
+    columns:
+      - name: user_id
+        description: Natural platform user identifier.
+        tests:
+          - not_null
+      - name: period_grain
+        description: Time granularity — 'day', 'week', or 'month'.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["day", "week", "month"]
+      - name: period_start
+        description: >
+          Truncated start date for the period. Daily = the event date;
+          weekly = Monday of the week; monthly = 1st of the month.
+        tests:
+          - not_null
+      - name: prior_period_start
+        description: >
+          Start date of the immediately preceding period at this grain.
+          Used by rpt_growth_accounting to identify retained users without
+          hardcoding interval arithmetic in the report model.
+        tests:
+          - not_null
+      - name: next_period_start
+        description: >
+          Start date of the immediately following period at this grain.
+          Used by rpt_growth_accounting to identify and attribute churned users
+          to the period they missed.
+        tests:
+          - not_null

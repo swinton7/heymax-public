@@ -1,0 +1,83 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: >
+      Cleaned and typed event stream read directly from event_stream.csv via DuckDB read_csv_auto.
+      One row per raw event. Mandatory nulls are dropped; types are cast; strings are normalised.
+    columns:
+      - name: event_id
+        description: MD5 surrogate key derived from event_time, user_id, and event_type.
+        tests:
+          - not_null
+          - unique
+
+      - name: event_time
+        description: Full UTC timestamp of the event.
+        tests:
+          - not_null
+
+      - name: event_date
+        description: Calendar date of the event, extracted from event_time.
+        tests:
+          - not_null
+
+      - name: user_id
+        description: Platform user identifier (e.g. u_0063).
+        tests:
+          - not_null
+
+      - name: gender
+        description: User-reported gender.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["male", "female", "non-binary", "prefer not to say"]
+
+      - name: event_type
+        description: Type of action the user performed.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["miles_earned", "miles_redeemed", "reward_search", "share", "like"]
+
+      - name: transaction_category
+        description: >
+          Merchant or reward category. Present on miles_earned and miles_redeemed events
+          (the category where miles were transacted). Also present on ~15k reward_search
+          events, indicating the category the user searched within — semantically valid,
+          not a data quality issue. Null for share and like events.
+
+      - name: miles_amount
+        description: Miles earned or redeemed. Null for non-miles events.
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+              where: "miles_amount is not null"
+
+      - name: platform
+        description: Client platform.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["web", "ios", "android"]
+
+      - name: utm_source
+        description: Acquisition channel.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["facebook", "google", "organic", "referral", "tiktok"]
+
+      - name: country
+        description: ISO country code of the user session.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["SG", "MY", "PH", "ID", "TH"]
