@@ -112,6 +112,10 @@ models:
           - dbt_utils.expression_is_true:
               arguments:
                 expression: "> 0"
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= cohort_size"
+              name: retained_users_never_exceeds_cohort_size
       - name: cohort_size
         description: Total users in the cohort (denominator for retention_pct).
         tests:
@@ -126,10 +130,6 @@ models:
           - dbt_utils.expression_is_true:
               arguments:
                 expression: ">= 0 and retention_pct <= 100"
-          - dbt_utils.expression_is_true:
-              arguments:
-                expression: "<= cohort_size * 100.0 / cohort_size"
-                name: retention_pct_retained_users_never_exceeds_cohort_size
 
   - name: rpt_engagement
     description: >
